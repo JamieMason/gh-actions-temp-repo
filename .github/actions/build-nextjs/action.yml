@@ -1,0 +1,33 @@
+name: Build Next.js
+description: Build and cache the output of `next build` for use in later jobs
+
+inputs:
+  NEXTJS_BUILD_CACHE_KEY:
+    description: |
+      Required, the cache key to manage the .next directory. It should be
+      derived from hashes of the contents of *every* file which can affects its
+      output: js, ts, css, package-lock.json etc. This way we can make
+      guarantees which mean we can skip the build step on repeat builds.
+    required: true
+  NEXTJS_BUILD_PATH:
+    description: "Defaults to .next"
+    default: ".next"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    # Reads from cache here, then writes to cache at the end of this job
+    - name: Cache .next
+      uses: actions/cache@v3
+      id: cache-next
+      with:
+        path: ${{ inputs.NEXTJS_BUILD_PATH }}
+        key: ${{ inputs.NEXTJS_BUILD_CACHE_KEY }}
+
+    # Build the Next.js Application
+    - name: Build .next
+      shell: bash
+      run: |
+        npm exec next -- telemetry disable
+        npm run build

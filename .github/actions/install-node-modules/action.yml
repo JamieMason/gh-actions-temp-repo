@@ -1,0 +1,37 @@
+name: Install node_modules
+description: Install and Cache node_modules for use in later jobs
+
+inputs:
+  NODE_MODULES_CACHE_KEY:
+    description: "Required, the cache key node_modules can read and write to"
+    required: true
+  NODE_MODULES_PATH:
+    description: "Defaults to node_modules"
+    default: "node_modules"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    # Ensure Node.js is available
+    - name: Setup Node
+      uses: actions/setup-node@v3
+      with:
+        node-version-file: "package.json"
+
+    # Cache the node_modules directory so npm install can be skipped entirely.
+    # Not only in the next step of this job, but in subsequent jobs in this
+    # workflow, by mounting the node_modules directory from the cache instead
+    # of running `npm install` again.
+    - name: Cache node_modules
+      uses: actions/cache@v3
+      id: cache-npm
+      with:
+        path: ${{ inputs.NODE_MODULES_PATH }}
+        key: ${{ inputs.NODE_MODULES_CACHE_KEY }}
+
+    # if node_modules wasn't restored from cache, create it and cache it
+    - name: Install node_modules
+      shell: bash
+      if: steps.cache-npm.outputs.cache-hit != 'true'
+      run: npm ci --prefer-offline --progress=false --no-audit

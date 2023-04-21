@@ -1,0 +1,26 @@
+name: Mount Next.js
+description: Mount the output of `next build` we built in an earlier job
+
+inputs:
+  NEXTJS_BUILD_CACHE_KEY:
+    description: |
+      Required, the cache key to manage the .next directory. It should be
+      derived from hashes of the contents of *every* file which can affects its
+      output: js, ts, css, package-lock.json etc. This way we can make
+      guarantees which mean we can skip the build step on repeat builds.
+    required: true
+  NEXTJS_BUILD_PATH:
+    description: "Defaults to .next"
+    default: ".next"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    # Mount the app we built in an earlier job
+    - name: Mount .next
+      uses: actions/cache/restore@v3
+      with:
+        fail-on-cache-miss: true
+        path: ${{ inputs.NEXTJS_BUILD_PATH }}
+        key: ${{ inputs.NEXTJS_BUILD_CACHE_KEY }}

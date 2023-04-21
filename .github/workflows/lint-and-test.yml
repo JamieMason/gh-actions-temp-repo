@@ -1,0 +1,105 @@
+name: Pull Request
+
+on:
+  pull_request:
+    branches: [main]
+
+env:
+  E2E_RESULTS_PATH: test/results
+  NEXTJS_BUILD_PATH: .next
+  NEXTJS_CACHE_PATH: .next/cache
+  NODE_MODULES_PATH: node_modules
+
+jobs:
+  # Usage: ${{ needs.generate-cache-keys.outputs.NAME_OF_KEY_HERE }}
+  generate-cache-keys:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      LOCKFILES_CONTENTS_HASH: ${{ steps.CACHE_KEYS.outputs.LOCKFILES_CONTENTS_HASH }}
+      SOURCE_FILES_CONTENTS_HASH: ${{ steps.CACHE_KEYS.outputs.SOURCE_FILES_CONTENTS_HASH }}
+      NODE_MODULES_CACHE_KEY: ${{ steps.CACHE_KEYS.outputs.NODE_MODULES_CACHE_KEY }}
+      NEXTJS_BUILD_CACHE_KEY: ${{ steps.CACHE_KEYS.outputs.NEXTJS_BUILD_CACHE_KEY }}
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v3
+      - name: Generate Cache Keys
+        id: CACHE_KEYS
+        uses: ./.github/actions/generate-cache-keys
+
+  setup:
+    needs: generate-cache-keys
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v3
+      - name: Install node_modules
+        uses: ./.github/actions/install-node-modules
+        with:
+          NODE_MODULES_CACHE_KEY: ${{ needs.generate-cache-keys.outputs.NODE_MODULES_CACHE_KEY }}
+          NODE_MODULES_PATH: ${{ env.NODE_MODULES_PATH }}
+
+  lint-and-unit-test:
+    needs: [setup, generate-cache-keys]
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v3
+      - name: Mount node_modules
+        uses: ./.github/actions/mount-node-modules
+        with:
+          NODE_MODULES_CACHE_KEY: ${{ needs.generate-cache-keys.outputs.NODE_MODULES_CACHE_KEY }}
+          NODE_MODULES_PATH: ${{ env.NODE_MODULES_PATH }}
+      - name: Run ESLint
+        run: npm exec eslint -- . --ext .ts,.tsx
+      - name: Run Unit Tests
+        run: npm run test
+
+  build:
+    needs: [setup, generate-cache-keys]
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v3
+      - name: Mount node_modules
+        uses: ./.github/actions/mount-node-modules
+        with:
+          NODE_MODULES_CACHE_KEY: ${{ needs.generate-cache-keys.outputs.NODE_MODULES_CACHE_KEY }}
+          NODE_MODULES_PATH: ${{ env.NODE_MODULES_PATH }}
+      - name: Build .next
+        uses: ./.github/actions/build-nextjs
+        with:
+          NEXTJS_BUILD_CACHE_KEY: ${{ needs.generate-cache-keys.outputs.NEXTJS_BUILD_CACHE_KEY }}
+          NEXTJS_BUILD_PATH: ${{ env.NEXTJS_BUILD_PATH }}
+
+  e2e-test:
+    needs: [build, generate-cache-keys]
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v3
+      - name: Mount node_modules
+        uses: ./.github/actions/mount-node-modules
+        with:
+          NODE_MODULES_CACHE_KEY: ${{ needs.generate-cache-keys.outputs.NODE_MODULES_CACHE_KEY }}
+          NODE_MODULES_PATH: ${{ env.NODE_MODULES_PATH }}
+      - name: Mount .next
+        uses: ./.github/actions/mount-nextjs
+        with:
+          NEXTJS_BUILD_CACHE_KEY: ${{ needs.generate-cache-keys.outputs.NEXTJS_BUILD_CACHE_KEY }}
+          NEXTJS_BUILD_PATH: ${{ env.NEXTJS_BUILD_PATH }}
+      - name: Install Browsers
+        uses: ./.github/actions/install-browsers
+      - name: Run Playwright Tests
+        run: DEBUG=pw:api npm exec playwright -- test
+      - name: Store Artifacts from Failed Tests
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: ${{ env.E2E_RESULTS_PATH }}
+          retention-days: 7

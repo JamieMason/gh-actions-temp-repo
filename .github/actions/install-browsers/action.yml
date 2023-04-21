@@ -1,0 +1,30 @@
+name: Install Browsers
+description: Install and Cache Browsers for use with Playwright
+
+inputs:
+  E2E_BROWSERS_PATH:
+    description: "Location of Playwright's Cache"
+    default: ~/.cache/ms-playwright
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    # Cache Browsers against only the version of Playwright changing
+    - id: PLAYWRIGHT_VERSION
+      shell: bash
+      run: echo "key=PLAYWRIGHT_VERSION-$( npm exec playwright -- --version )" >> $GITHUB_OUTPUT
+
+    # Reads from cache here, then writes to cache at the end of this job
+    - name: Cache Browsers
+      uses: actions/cache@v3
+      id: cache-browsers
+      with:
+        path: ${{ inputs.E2E_BROWSERS_PATH }}
+        key: ${{ steps.PLAYWRIGHT_VERSION.outputs.key }}
+
+    # Only install Browsers when cache is stale
+    - name: Install Chromium
+      shell: bash
+      if: steps.cache-browsers.outputs.cache-hit != 'true'
+      run: npm exec playwright -- install --with-deps chromium
