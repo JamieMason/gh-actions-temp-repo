@@ -1,0 +1,36 @@
+name: Generate Cache Keys
+description: Generate stable cache keys based on file contents
+
+outputs:
+  LOCKFILES_CONTENTS_HASH:
+    description: Unique hash based on the contents of package-lock.json files
+    value: ${{ steps.LOCKFILES_CONTENTS_HASH.outputs.key }}
+  SOURCE_FILES_CONTENTS_HASH:
+    description: Unique hash based on the contents of application source code
+    value: ${{ steps.SOURCE_FILES_CONTENTS_HASH.outputs.key }}
+  NODE_MODULES_CACHE_KEY:
+    description: Node modules cache key
+    value: ${{ steps.NODE_MODULES_CACHE_KEY.outputs.key }}
+  NEXTJS_BUILD_CACHE_KEY:
+    description: Nextjs build cache key
+    value: ${{ steps.NEXTJS_BUILD_CACHE_KEY.outputs.key }}
+
+runs:
+  using: "composite"
+  steps:
+    # Unique hash for lockfiles.
+    - id: LOCKFILES_CONTENTS_HASH
+      shell: bash
+      run: echo "key=LOCKFILES_CONTENTS_HASH-${{ runner.os }}-${{ hashFiles('package-lock.json') }}" >> $GITHUB_OUTPUT
+    # Every file that can affect the output of .next should go here.
+    - id: SOURCE_FILES_CONTENTS_HASH
+      shell: bash
+      run: echo "key=SOURCE_FILES_CONTENTS_HASH-${{ runner.os }}-${{ hashFiles('*.js','*.json','*.ts','src/**','public/**') }}" >> $GITHUB_OUTPUT
+    # Invalidate node_modules when lockfile changes.
+    - id: NODE_MODULES_CACHE_KEY
+      shell: bash
+      run: echo "key=NODE_MODULES_CACHE_KEY-${{ steps.LOCKFILES_CONTENTS_HASH.outputs.key }}" >> $GITHUB_OUTPUT
+    # Invalidate built app when source or lockfile change.
+    - id: NEXTJS_BUILD_CACHE_KEY
+      shell: bash
+      run: echo "key=NEXTJS_BUILD_CACHE_KEY-${{ steps.SOURCE_FILES_CONTENTS_HASH.outputs.key }}-${{ steps.LOCKFILES_CONTENTS_HASH.outputs.key }}" >> $GITHUB_OUTPUT
